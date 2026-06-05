@@ -1,0 +1,15 @@
+flask==3.0.3
+flask-cors==4.0.1
+gunicorn==22.0.0
+python-dotenv==1.0.1
+requests==2.32.3
+numpy==1.26.4
+
+# Sentiment analysis
+vaderSentiment==3.3.2
+
+# Optional ML models (comment out if not needed — service works without them)
+# transformers==4.40.2
+# torch==2.3.0
+# keybert==0.8.4
+# sentence-transformers==3.0.1
