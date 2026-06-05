@@ -53,8 +53,8 @@ yarn-error.log*
 .env
 !.env.example
 hardhat.config.js
-# vercel
-.vercel
+# vercel - keep project.json but ignore cache
+.vercel/cache
 drizzle.config.js
 hardhat.config.js
 /hardhat.config.js
