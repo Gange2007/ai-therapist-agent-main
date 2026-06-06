@@ -4,7 +4,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 
 // Generate JWT Token
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'your-secret-key', {
+  return jwt.sign({ id }, process.env.JWT_SECRET || '7f3c9d8a2b1e6f4c5d7a9e8b3c1f6a2d9e7c4b5a8f1d3e6', {
     expiresIn: '30d',
   });
 };

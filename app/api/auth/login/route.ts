@@ -18,8 +18,18 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
+const text = await res.text();
+console.log("Backend response:", text);
 
-    const data = await res.json();
+let data;
+try {
+  data = JSON.parse(text);
+} catch {
+  return NextResponse.json(
+    { message: `Backend returned non-JSON response: ${text}` },
+    { status: 500 }
+  );
+}
 
     if (!res.ok) {
       console.error("[POST /api/auth/login] Backend error:", res.status, data);
