@@ -36,10 +36,9 @@ import { MoodForm } from "@/components/mood/mood-form";
 import { AnxietyGames } from "@/components/games/anxiety-games";
 
 import {
-  getUserActivities,
-  saveMoodData,
-  logActivity,
-} from "@/lib/static-dashboard-data";
+  getActivities,
+  logActivity as logActivityAPI,
+} from "@/lib/api/activity";
 
 import {
   Dialog,
@@ -335,10 +334,11 @@ export default function Dashboard() {
     return days;
   };
 
-  // Modify the loadActivities function to use a default user ID
+  // Modify the loadActivities function to use real API
   const loadActivities = useCallback(async () => {
     try {
-      const userActivities = await getUserActivities("default-user");
+      const response = await getActivities({ limit: 100 });
+      const userActivities = response.data || [];
       setActivities(userActivities);
       setActivityHistory(transformActivitiesToDayActivity(userActivities));
     } catch (error) {
@@ -459,12 +459,19 @@ export default function Dashboard() {
   const handleMoodSubmit = async (data: { moodScore: number }) => {
     setIsSavingMood(true);
     try {
-      await saveMoodData({
-        userId: "default-user",
-        mood: data.moodScore,
-        note: "",
+      // Use real mood API instead of static data
+      const token = localStorage.getItem("token");
+      const res = await fetch("/api/mood", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ score: data.moodScore, note: "" }),
       });
+      if (!res.ok) throw new Error("Failed to save mood");
       setShowMoodModal(false);
+      await loadActivities();
     } catch (error) {
       console.error("Error saving mood:", error);
     } finally {
@@ -480,8 +487,7 @@ export default function Dashboard() {
   const handleGamePlayed = useCallback(
     async (gameName: string, description: string) => {
       try {
-        await logActivity({
-          userId: "default-user",
+        await logActivityAPI({
           type: "game",
           name: gameName,
           description: description,

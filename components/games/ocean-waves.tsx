@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, useAnimation } from "framer-motion";
 import { Waves, Volume2, VolumeX, Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,21 +16,20 @@ export function OceanWaves() {
   const [progress, setProgress] = useState(0);
   const [timeLeft, setTimeLeft] = useState(SESSION_DURATION);
   const waveControls = useAnimation();
-  const [audio] = useState(new Audio("/sounds/waves.mp3"));
+  const audio = useMemo(() => new Audio("/sounds/waves.mp3"), []);
 
   useEffect(() => {
     audio.loop = true;
-    audio.volume = volume / 100;
 
     return () => {
       audio.pause();
       audio.currentTime = 0;
     };
-  }, []);
+  }, [audio]);
 
   useEffect(() => {
     audio.volume = volume / 100;
-  }, [volume]);
+  }, [audio, volume]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -58,7 +57,7 @@ export function OceanWaves() {
     }
 
     return () => clearInterval(timer);
-  }, [isPlaying, timeLeft]);
+  }, [isPlaying, timeLeft, waveControls]);
 
   const togglePlay = () => {
     if (isPlaying) {

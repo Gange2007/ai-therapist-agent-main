@@ -9,9 +9,9 @@ try {
 const cors = require("cors");
 
 // Load env BEFORE anything else
-// Load root .env, then root .env.local to override, then backend-specific .env.
+// Load repo-level env first (if present), then backend-local env as fallback/override.
+// This makes sure EMAIL_USER/EMAIL_PASS are always available at runtime.
 dotenv.config();
-dotenv.config({ path: "./.env.local" });
 dotenv.config({ path: "./backend/.env" });
 
 const errorHandler = require("./middleware/errorHandler");
@@ -101,8 +101,6 @@ app.use((req, res) => {
 
 // Email env debug (do not log password)
 console.log('[mail debug] EMAIL_USER set:', Boolean(process.env.EMAIL_USER));
-console.log('[env debug] OPENAI_API_KEY set:', Boolean(process.env.OPENAI_API_KEY));
-console.log('[env debug] GEMINI_API_KEY set:', Boolean(process.env.GEMINI_API_KEY));
 
 const PORT = process.env.PORT || 5000;
 
@@ -116,10 +114,13 @@ const server = app.listen(PORT, () => {
 
 server.on("error", (err) => {
   if (err && err.code === "EADDRINUSE") {
-    console.error(`[server] Port ${PORT} already in use.`);
-    process.exit(1);
+    console.error(
+      `[server] Port ${PORT} already in use. Stop the previous process or set PORT env var.`
+    );
   }
-  console.error(err);
+  throw err;
 });
 
 module.exports = app;
+
+

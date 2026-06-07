@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
+import { Send, Bot, User, Loader2, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import ReactMarkdown from "react-markdown";
@@ -17,7 +17,15 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDistanceToNow } from "date-fns";
-import { sendChatMessage, ChatMessage } from "@/lib/api/chat";
+import {
+  sendChatMessage,
+  ChatMessage,
+  getChatHistory,
+  createChatSession,
+  deleteChatSession,
+  clearChatHistory,
+} from "@/lib/api/chat";
+import { SessionHistory } from "@/components/therapy/session-history";
 
 const SUGGESTED_QUESTIONS = [
   { text: "How can I manage my anxiety better?" },
@@ -47,20 +55,89 @@ export default function TherapyPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
-    // Gemini-only: no saved sessions/history.
-    setMessages([
-      {
-        role: "assistant",
-        content: "Hello 👋 I'm here for you. How are you feeling today?",
-        timestamp: new Date(),
-      },
-    ]);
-  }, []);
+
+    const loadHistoryOrCreateSession = async () => {
+      // If sessionId is "new" or doesn't exist, create a new session immediately
+      if (!sessionId || sessionId === "new") {
+        try {
+          const newSession = await createChatSession();
+          setCurrentSessionId(newSession.sessionId);
+          setMessages([
+            {
+              role: "assistant",
+              content: "Hello 👋 I'm here for you. How are you feeling today?",
+              timestamp: new Date(),
+            },
+          ]);
+        } catch (error) {
+          console.error("Failed to create session:", error);
+          setMessages([
+            {
+              role: "assistant",
+              content: "Hello 👋 I'm here for you. How are you feeling today?",
+              timestamp: new Date(),
+            },
+          ]);
+        }
+        return;
+      }
+
+      // Try to load history for existing session
+      try {
+        const history = await getChatHistory(sessionId);
+        if (history && history.length > 0) {
+          setMessages(history);
+          setCurrentSessionId(sessionId);
+          return;
+        }
+
+        // If no history exists, show welcome message
+        setMessages([
+          {
+            role: "assistant",
+            content: "Hello 👋 I'm here for you. How are you feeling today?",
+            timestamp: new Date(),
+          },
+        ]);
+        setCurrentSessionId(sessionId);
+      } catch (error) {
+        console.error("Failed to load chat history:", error);
+        // If loading fails, create a new session
+        try {
+          const newSession = await createChatSession();
+          setCurrentSessionId(newSession.sessionId);
+          setMessages([
+            {
+              role: "assistant",
+              content: "Hello 👋 I'm here for you. How are you feeling today?",
+              timestamp: new Date(),
+            },
+          ]);
+        } catch (createError) {
+          console.error("Failed to create session:", createError);
+          setMessages([
+            {
+              role: "assistant",
+              content: "Hello 👋 I'm here for you. How are you feeling today?",
+              timestamp: new Date(),
+            },
+          ]);
+        }
+      }
+    };
+
+    loadHistoryOrCreateSession();
+  }, [sessionId]);
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -93,27 +170,16 @@ export default function TherapyPage() {
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      // Build Gemini-format history.
-      // Rules: must start with "user", must alternate user/model, exclude current message.
-      const rawHistory = messages.filter(
-        (m) => m.role === "user" || m.role === "assistant"
-      );
+      const effectiveSessionId = currentSessionId || sessionId || "new";
 
-      // Only include complete user→model pairs (history must alternate and end with model)
-      const geminiHistory: { role: "user" | "model"; parts: { text: string }[] }[] = [];
-      for (let i = 0; i < rawHistory.length - 1; i += 2) {
-        const userTurn = rawHistory[i];
-        const modelTurn = rawHistory[i + 1];
-        // Only add if we have a proper user→assistant pair
-        if (userTurn?.role === "user" && modelTurn?.role === "assistant") {
-          geminiHistory.push({ role: "user", parts: [{ text: userTurn.content }] });
-          geminiHistory.push({ role: "model", parts: [{ text: modelTurn.content }] });
-        }
+      console.log("[handleSubmit] Sending message with effectiveSessionId:", effectiveSessionId);
+      const response = await sendChatMessage(effectiveSessionId, currentMessage);
+
+      // Update currentSessionId if a new session was created
+      if (response.sessionId && response.sessionId !== effectiveSessionId) {
+        console.log("[handleSubmit] Updating currentSessionId to:", response.sessionId);
+        setCurrentSessionId(response.sessionId);
       }
-
-      console.log("[TherapyPage] Sending with history length:", geminiHistory.length);
-
-      const response = await sendChatMessage(sessionId ?? "", currentMessage, geminiHistory);
 
       setMessages((prev) => [
         ...prev,
@@ -121,16 +187,17 @@ export default function TherapyPage() {
           role: "assistant",
           content: response?.response || "I'm here for you.",
           timestamp: new Date(),
+          metadata: response?.metadata,
         },
       ]);
     } catch (err: any) {
-      console.error("[TherapyPage] Chat error:", err?.message || err);
+      console.error("[handleSubmit] Error:", err);
       const errMsg = err?.message || "";
       const displayMsg = errMsg.includes("rate limit") || errMsg.includes("quota")
         ? "The AI service is temporarily busy due to high demand. Please wait a moment and try again."
         : errMsg.includes("unavailable")
-        ? "The AI service is temporarily unavailable. Please try again in a few seconds."
-        : "Sorry — I couldn't generate a response right now. Please try again.";
+          ? "The AI service is temporarily unavailable. Please try again in a few seconds."
+          : "Sorry — I couldn't generate a response right now. Please try again.";
 
       setMessages((prev) => [
         ...prev,
@@ -147,7 +214,56 @@ export default function TherapyPage() {
 
   const handleSuggestedQuestion = (text: string) => {
     setMessage(text);
-    // Let user hit Enter; avoids abusing synthetic events.
+  };
+
+  const handleDeleteSession = async () => {
+    if (!currentSessionId) return;
+
+    setIsDeletingSession(true);
+    try {
+      await deleteChatSession(currentSessionId);
+      window.location.href = "/dashboard";
+    } catch (error) {
+      console.error("Failed to delete session:", error);
+      alert("Failed to delete session. Please try again.");
+    } finally {
+      setShowDeleteConfirm(false);
+      setIsDeletingSession(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!currentSessionId) return;
+
+    setIsClearingHistory(true);
+    try {
+      await clearChatHistory(currentSessionId);
+      setMessages([
+        {
+          role: "assistant",
+          content: "Hello 👋 I'm here for you. How are you feeling today?",
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to clear history:", error);
+      alert("Failed to clear chat history. Please try again.");
+    } finally {
+      setShowClearConfirm(false);
+      setIsClearingHistory(false);
+    }
+  };
+
+  const handleNewChat = async () => {
+    try {
+      const newSession = await createChatSession();
+      console.log("[handleNewChat] Created session:", newSession);
+      const sessionId = newSession.sessionId || newSession._id;
+      window.location.href = `/therapy/${sessionId}`;
+    } catch (error) {
+      console.error("Failed to create new session:", error);
+      alert("Failed to create new session. Please try again.");
+    }
   };
 
   if (!mounted) {
@@ -160,7 +276,8 @@ export default function TherapyPage() {
 
   return (
     <div className="relative max-w-7xl mx-auto px-4">
-      <div className="flex h-[calc(100vh-4rem)] mt-20">
+      <div className="flex h-[calc(100vh-4rem)] mt-20 gap-4">
+        {/* Main chat area */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-background rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -169,10 +286,39 @@ export default function TherapyPage() {
               </div>
               <div>
                 <h2 className="font-semibold">AI Therapist</h2>
-                <p className="text-sm text-muted-foreground">
-                  {messages.length} messages
-                </p>
+                <p className="text-sm text-muted-foreground">{messages.length} messages</p>
               </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNewChat}
+              >
+                New Chat
+              </Button>
+              {currentSessionId && currentSessionId !== "new" && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowClearConfirm(true)}
+                    disabled={isClearingHistory}
+                  >
+                    Clear History
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="text-destructive hover:text-destructive"
+                    disabled={isDeletingSession}
+                  >
+                    Delete Chat
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -203,9 +349,7 @@ export default function TherapyPage() {
                         AI Therapist
                       </span>
                     </div>
-                    <p className="text-muted-foreground mt-2">
-                      How can I assist you today?
-                    </p>
+                    <p className="text-muted-foreground mt-2">How can I assist you today?</p>
                   </div>
                 </div>
 
@@ -248,9 +392,7 @@ export default function TherapyPage() {
                         transition={{ duration: 0.25 }}
                         className={cn(
                           "px-2 py-4",
-                          msg.role === "assistant"
-                            ? "bg-muted/20 rounded-lg"
-                            : "bg-background rounded-lg"
+                          msg.role === "assistant" ? "bg-muted/20 rounded-lg" : "bg-background rounded-lg"
                         )}
                       >
                         <div className="flex gap-4">
@@ -268,9 +410,7 @@ export default function TherapyPage() {
 
                           <div className="flex-1 space-y-2">
                             <div className="flex items-center justify-between gap-3">
-                              <p className="font-medium text-sm">
-                                {msg.role === "assistant" ? "AI Therapist" : "You"}
-                              </p>
+                              <p className="font-medium text-sm">{msg.role === "assistant" ? "AI Therapist" : "You"}</p>
                               {msg.metadata?.technique && (
                                 <Badge variant="secondary" className="text-xs">
                                   {msg.metadata.technique}
@@ -318,10 +458,7 @@ export default function TherapyPage() {
           )}
 
           <div className="border-t bg-background/50 backdrop-blur supports-[backdrop-filter]:bg-background/50 p-4">
-            <form
-              onSubmit={handleSubmit}
-              className="max-w-3xl mx-auto flex gap-4 items-end relative"
-            >
+            <form onSubmit={handleSubmit} className="max-w-3xl mx-auto flex gap-4 items-end relative">
               <div className="flex-1 relative group">
                 <textarea
                   value={message}
@@ -372,7 +509,77 @@ export default function TherapyPage() {
             </div>
           </div>
         </div>
+
+        {/* Session history on the right (beside chat) */}
+        <div className="w-80 hidden lg:block">
+          <SessionHistory />
+        </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <h3 className="text-lg font-semibold mb-2">Delete Chat Session</h3>
+              <p className="text-muted-foreground mb-4">
+                Are you sure you want to delete this chat session? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDeleteSession} disabled={isDeletingSession}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Clear History Confirmation Dialog */}
+      <AnimatePresence>
+        {showClearConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-background rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <h3 className="text-lg font-semibold mb-2">Clear Chat History</h3>
+              <p className="text-muted-foreground mb-4">
+                Are you sure you want to clear all messages from this chat session? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => setShowClearConfirm(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleClearHistory} disabled={isClearingHistory}>
+                  Clear
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

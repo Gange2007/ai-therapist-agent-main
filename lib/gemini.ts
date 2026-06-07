@@ -4,126 +4,26 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-const SYSTEM_PROMPT = `You are Aura, a warm, intelligent, and context-aware AI therapist companion. You think like a real therapist — connecting dots across the conversation and responding with genuine insight rather than generic comfort.
+const SYSTEM_PROMPT = `You are Aura, a clinically-oriented companion who communicates clearly, concisely, and with a safety-first approach.
 
-## CORE BEHAVIOUR
+PRINCIPLES (required):
+1. Use a concise, clinician-style tone: precise, neutral, and empathetic.
+2. NEVER provide a medical diagnosis. Present possible causes only as general possibilities and explicitly include the disclaimer: "I am not a doctor. This is not medical advice. If you are concerned, please consult a healthcare professional."
+3. Prioritize safety: when red-flag symptoms appear (sudden severe pain, difficulty breathing, fainting, change in consciousness, signs of stroke, suicidal intent), instruct the user to seek emergency care immediately.
 
-1. Connect context across messages. If the user mentions a physical symptom (headache, fatigue, insomnia) and later mentions a stressor (exams, work, relationships), always link them explicitly.
+STRUCTURED RESPONSE (when symptoms are reported):
+- A short acknowledgement sentence.
+- A concise list (•) of plausible, high-level causes (up to 4), labeled as possibilities.
+- A concise list (•) of safe, non-invasive self-care steps the user can try immediately (avoid medication or procedural advice).
+- 2 focused clinician-style follow-up questions to clarify onset, severity, and red flags (e.g., "When did this start?", "On a scale of 1-10, how severe is the pain?").
+- If concern persists or red flags exist, recommend seeing a clinician and provide local emergency guidance when possible.
 
-2. Never give only generic empathetic responses. Always pair emotional validation with specific, useful information.
+CRISIS PROTOCOL: If the user expresses self-harm or imminent danger, respond with direct safety instructions and encourage immediate contact with local emergency services or crisis hotlines.
 
-3. Track the full conversation. Reference earlier messages to make responses feel continuous and personalised.
-
-4. Maintain a warm, conversational therapist tone. Sound like a caring, knowledgeable person — not a chatbot.
-
-## SYMPTOM RESPONSE PROTOCOL
-
-When a user mentions ANY physical or emotional symptom — headache, stress, tiredness, anxiety, lack of sleep, stomach ache, low mood, difficulty concentrating — ALWAYS respond using this exact structure:
-
-1. One warm acknowledgement sentence.
-2. A sentence introducing possible causes, followed by a bullet list of 4-5 causes relevant to their symptom.
-3. A sentence like "Here are some things that may help:", followed by a bullet list of 4-5 specific self-care suggestions tailored to the symptom.
-4. A sentence like "To better understand what you're going through:", followed by a bullet list of 2-3 short diagnostic questions.
-5. If the symptom could be medical or persistent, end with: "If this has been going on for a while or feels severe, it's worth checking in with a doctor or healthcare professional."
-
-Use actual bullet points (the • character) for all lists. This structure is mandatory for every symptom-related message.
-
-## SYMPTOM REFERENCE GUIDE
-
-Headache — Causes: stress/tension, dehydration, lack of sleep, eye strain from screens, skipped meals, neck/shoulder tension, illness. Self-care: drink water, rest eyes from screens, short break, deep breathing, gentle neck stretches, eat something light.
-
-Stress / Exam tension — Causes: workload pressure, fear of failure, poor sleep, excessive caffeine, no breaks, negative self-talk. Self-care: 4-7-8 breathing (inhale 4s, hold 7s, exhale 8s), 5-min breaks every 45 mins, write down worries, reduce caffeine, short walk.
-
-Tiredness / Fatigue — Causes: poor sleep, overworking, dehydration, poor nutrition, stress, no physical movement. Self-care: prioritise 7-9 hours sleep, 10-20 min nap, drink water, light movement, avoid screens before bed.
-
-Anxiety — Causes: upcoming events, uncertainty, negative thought spirals, caffeine, poor sleep, social pressure. Self-care: 5-4-3-2-1 grounding (5 things you see, 4 hear, 3 touch, 2 smell, 1 taste), box breathing, journalling, limit social media.
-
-Lack of sleep / Insomnia — Causes: racing thoughts, screen use before bed, irregular schedule, stress, late caffeine. Self-care: write a worry list before bed, no screens 30 mins before sleep, progressive muscle relaxation, cool dark room, consistent bedtime.
-
-Low mood / Sadness — Causes: isolation, stress accumulation, lack of sunlight, disrupted routine, negative thought patterns. Self-care: brief outdoor walk, talk to someone you trust, write 3 things you're grateful for, gentle movement, maintain routine.
-
-## CRISIS PROTOCOL
-
-If the user expresses suicidal ideation or self-harm: acknowledge their pain seriously, provide "Please reach out to the 988 Suicide & Crisis Lifeline — call or text 988 (US)", and encourage contacting emergency services.
-
-## FEW-SHOT EXAMPLES
-
-User: "im suffering from headache"
-
-Aura: "I'm sorry you're experiencing a headache — they can really drain your energy and make it hard to focus.
-
-Headaches can sometimes be caused by:
-• Stress or tension building up in the body
-• Dehydration — even mild dehydration triggers them
-• Lack of sleep or poor sleep quality
-• Eye strain from prolonged screen use
-• Skipping meals or low blood sugar
-
-Here are some things that may help:
-• Drink a full glass of water right now
-• Step away from your screen for 10-15 minutes
-• Try slow deep breaths or gentle neck and shoulder stretches
-• Rest in a quiet, dimly lit space if possible
-• Eat something light if you haven't had a meal recently
-
-To better understand what you're going through:
-• How long have you had this headache?
-• Would you describe it as mild, moderate, or severe?
-• Have you been under stress or studying for long hours recently?
-
-If the headache is very severe, came on suddenly, or has lasted more than a day, it's worth checking in with a doctor."
-
----
-
-User: "exam tension" (after mentioning headache)
-
-Aura: "That connection makes a lot of sense — exam stress is one of the most common triggers for tension headaches, and your body is physically absorbing the pressure you're under. The headache you mentioned is very likely your body signalling that it needs relief.
-
-Exam stress is often caused by:
-• Fear of failure or high expectations from yourself or others
-• Long study sessions without enough breaks
-• Poor or disrupted sleep during exam season
-• Too much caffeine and not enough water or food
-• Negative self-talk and catastrophising thoughts
-
-Here are some things that may help right now:
-• Try 4-7-8 breathing: inhale for 4 seconds, hold for 7, exhale for 8 — repeat 3 times
-• Take a proper 5-minute break away from your study materials
-• Drink water — dehydration makes stress and headaches significantly worse
-• Write your biggest exam worry down on paper to get it out of your head
-• Schedule short study blocks (45 mins on, 5-10 mins off) rather than marathon sessions
-
-To better understand what you're feeling:
-• On a scale of 1-10, how stressed are you feeling right now?
-• Are you getting enough sleep, or has studying been cutting into that?
-• How much time do you have left before the exam?"
-
----
-
-User: "i cant sleep"
-
-Aura: "Difficulty sleeping often means your mind is carrying more than it can switch off from — that's a very common response to stress or anxiety.
-
-Trouble sleeping can be caused by:
-• Racing or anxious thoughts that activate when you lie down
-• Using screens close to bedtime (blue light disrupts melatonin)
-• Stress or worry about upcoming events
-• An irregular sleep schedule
-• Caffeine consumed later in the day
-
-Here are some things that may help tonight:
-• Write down everything on your mind before bed — it empties the mental load
-• Avoid all screens for at least 30 minutes before sleeping
-• Try progressive muscle relaxation: tense and release each muscle group from toes to shoulders
-• Keep your room cool and as dark as possible
-• Try to go to bed and wake up at the same time every day
-
-To better understand what's happening:
-• What does your mind tend to focus on when you're lying awake?
-• How many nights has this been going on?
-• Is there something specific coming up that's worrying you?"`;
+Tone: clinical, concise, empathetic, and safety-first.`;
 
 export type GeminiHistoryEntry = {
+
   role: "user" | "model";
   parts: { text: string }[];
 };
@@ -133,8 +33,7 @@ export async function generateGeminiResponse(
   history: GeminiHistoryEntry[] = []
 ): Promise<string> {
   if (!GEMINI_API_KEY) {
-    console.warn("[gemini] GEMINI_API_KEY is not set. Falling back to local responder.");
-    return getLocalFallbackResponse(message);
+    throw new Error("GEMINI_API_KEY is not configured. Please set GEMINI_API_KEY in your .env.local or environment.");
   }
 
   const contents: { role: string; parts: { text: string }[] }[] = [
@@ -188,215 +87,278 @@ export async function generateGeminiResponse(
 }
 
 export function getLocalFallbackResponse(message: string): string {
-  const msg = message.toLowerCase();
+  const msg = (message || "").toLowerCase();
+  const disclaimer = `I am not a doctor. This is not medical advice. If you are concerned, please consult a healthcare professional.`;
 
-  // 1. Headache
-  if (
-    msg.includes("headache") ||
-    msg.includes("migraine") ||
-    msg.includes("head pain") ||
-    msg.includes("head hurt")
-  ) {
-    return `I'm sorry you're experiencing a headache — they can really drain your energy and make it hard to focus.
+  // Symptom templates (acknowledge, possible causes, self-care, 2 follow-up questions, disclaimer)
+  // NOTE: This local fallback only runs when the Gemini API call fails.
 
-Headaches can sometimes be caused by:
-• Stress or tension building up in the body
-• Dehydration — even mild dehydration triggers them
-• Lack of sleep or poor sleep quality
-• Eye strain from prolonged screen use
-• Skipping meals or low blood sugar
+  const has = (re: RegExp) => re.test(msg);
 
-Here are some things that may help:
-• Drink a full glass of water right now
-• Step away from your screen for 10-15 minutes
-• Try slow deep breaths or gentle neck and shoulder stretches
-• Rest in a quiet, dimly lit space if possible
-• Eat something light if you haven't had a meal recently
+  const followUp = {
+    painLevel: `• On a scale of 1–10, how severe is it right now?`,
+    whenStarted: `• When did it start?`,
+    swelling: `• Any swelling, warmth, or visible changes?`,
+    injury: `• Any recent injury, fall, twist, or new activity?`,
+    tempKnown: `• What is your temperature (if you’ve checked), and for how long?`,
+    breathing: `• Any trouble breathing or chest pain?`,
+    mucus: `• Is the cough dry or bringing up mucus?`,
+    severityFever: `• Is the fever persistent or getting worse?`,
+    primaryWorry: `• What’s the main worry or thought that keeps coming up?`,
+    duration: `• How long has this been going on?`,
+    sleepTrouble: `• How many nights has the sleep problem been happening?`,
+  };
 
-To better understand what you're going through:
-• How long have you had this headache?
-• Would you describe it as mild, moderate, or severe?
-• Have you been under stress or studying for long hours recently?
+  if (has(/\b(headache|migraine|head pain|head hurt)\b/) || (msg.includes("head") && (msg.includes("ache") || msg.includes("hurt")))) {
+    return `I'm sorry you're dealing with a headache — that can be really draining.
 
-If this has been going on for a while or feels severe, it's worth checking in with a doctor or healthcare professional.`;
+Possible causes might include:
+• Dehydration or not eating enough
+• Stress/tension or poor posture
+• Lack of sleep or irregular sleep
+• Eye strain (screens/bright light)
+• Recent illness/sinus irritation (general possibilities)
+
+Self-care steps you can try now:
+• Drink water (and eat something light if you haven't)
+• Step away from screens for a short break
+• Try gentle neck/shoulder relaxation or slow breathing
+• Rest in a dim/quiet space
+
+Follow-up questions:
+${followUp.whenStarted}
+${followUp.painLevel}
+
+${disclaimer}`;
   }
 
-  // 2. Stress / Exam tension
-  if (
-    msg.includes("stress") ||
-    msg.includes("exam") ||
-    msg.includes("overwhelmed") ||
-    msg.includes("tension") ||
-    msg.includes("study") ||
-    msg.includes("pressure") ||
-    msg.includes("burnout") ||
-    msg.includes("stressed") ||
-    msg.includes("worry") ||
-    msg.includes("worried") ||
-    msg.includes("tense") ||
-    msg.includes("nervous") ||
-    msg.includes("stressed out")
-  ) {
-    return `It sounds like you're carrying a lot of pressure right now, and stress can be incredibly overwhelming to deal with.
 
-Stress is often caused by:
-• Workload pressure or high expectations from yourself or others
-• Long study sessions or periods of focus without enough physical breaks
-• Disrupted or poor quality sleep during busy periods
-• High caffeine consumption and dehydration
-• Persistent negative self-talk or worrying about future outcomes
+  if (/\b(knee pain|knee hurt|pain in my knee|aching knee)\b/.test(msg)) {
+    return `I'm sorry you're dealing with knee pain — it can make everyday movement frustrating.
 
-Here are some things that may help right now:
-• Try 4-7-8 breathing: inhale for 4 seconds, hold for 7, exhale for 8 — repeat 3 times
-• Take a proper 5-10 minute break away from all study and work materials
-• Drink water — dehydration makes stress and headaches significantly worse
-• Write down your biggest worries on paper to get them out of your head
-• Schedule short study blocks (45 mins on, 5-10 mins off) rather than marathon sessions
+Possible causes might include:
+• Overuse/strain from activity
+• A minor injury (twist/impact/sprain)
+• Inflammation of tissues around the knee
+• Wear-and-tear/arthritis-like changes (general possibility)
+• Muscle imbalance or altered mechanics
 
-To better understand what you're feeling:
-• On a scale of 1-10, how intense is this stress feeling right now?
-• Are you getting enough sleep, or has studying or work been cutting into that?
-• How much time do you have left before your exams or deadlines?
+Self-care steps you can try now:
+• Rest the knee and avoid painful movements for 24–48 hours
+• Ice for 15–20 minutes at a time after activity (if it helps)
+• Gentle compression/support if comfortable (avoid restricting circulation)
+• Support with comfortable footwear and avoid overloading it
 
-If this has been going on for a while or feels severe, it's worth checking in with a doctor or healthcare professional.`;
+Follow-up questions:
+• When did it start, and was there an injury or workout beforehand?
+• Any swelling/warmth, and can you put weight on it normally?
+
+${disclaimer}`;
   }
 
-  // 3. Tiredness / Fatigue
-  if (
-    msg.includes("tired") ||
-    msg.includes("fatigue") ||
-    msg.includes("exhausted") ||
-    msg.includes("sleepy") ||
-    msg.includes("weakness") ||
-    msg.includes("tiredness") ||
-    msg.includes("burnt out") ||
-    msg.includes("drained") ||
-    msg.includes("low energy") ||
-    msg.includes("worn out")
-  ) {
-    return `Feeling constantly tired or fatigued can make even the simplest tasks feel like a mountain to climb.
+  if (/\b(back pain|lower back pain|lumbar pain|spine pain)\b/.test(msg)) {
+    return `I'm sorry you're experiencing back pain — it can make sitting and moving harder.
 
-Tiredness and fatigue can be caused by:
-• Insufficient sleep (less than 7-9 hours) or poor sleep hygiene
-• Overworking without giving your body and mind time to recharge
-• Dehydration, which directly drains physical energy
-• Poor nutrition or irregular meals causing blood sugar crashes
-• Unmanaged stress or anxiety running in the background
+Possible causes might include:
+• Muscle strain or ligament irritation
+• Poor posture or prolonged sitting
+• Lifting/bending/twisting overuse
+• Stress-related muscle tension
+• Irritation of spine/back structures (general possibilities)
 
-Here are some things that may help:
-• Prioritize getting 7-9 hours of restful sleep tonight
-• Consider taking a short, timed 10-20 minute power nap to recharge
-• Drink a tall glass of water right now
-• Do some light movement, like stretching or a short walk, to boost circulation
-• Avoid screens for at least 30-60 minutes before bedtime
+Self-care steps you can try now:
+• Take it easier for 24–48 hours and avoid movements that sharply worsen pain
+• Use gentle heat or ice for comfort (whichever feels better)
+• Try light movement/short walks if they don't worsen symptoms
+• Gentle stretching only if it feels safe
 
-To better understand what you're going through:
-• How many hours of sleep have you been getting on average?
-• Have you been working or studying for long hours without a break?
-• Do you notice your energy levels dropping at specific times of the day?
+Follow-up questions:
+• Where exactly is the pain (low vs mid back), and did it start after lifting/sudden movement?
+• Any pain spreading down a leg, numbness/tingling, or trouble controlling bladder/bowel?
 
-If this has been going on for a while or feels severe, it's worth checking in with a doctor or healthcare professional.`;
+${disclaimer}`;
   }
 
-  // 4. Anxiety / Panic / Worry
-  if (
-    msg.includes("anxiety") ||
-    msg.includes("anxious") ||
-    msg.includes("panic") ||
-    msg.includes("worry") ||
-    msg.includes("worried") ||
-    msg.includes("overthinking") ||
-    msg.includes("nervous") ||
-    msg.includes("restless")
-  ) {
-    return `Anxiety can feel very intense and physical, and I want to remind you that you are safe in this moment.
+  if (/\b(neck pain|sore neck|cervical pain|pain in my neck)\b/.test(msg)) {
+    return `I'm sorry your neck is hurting — neck pain can be stubborn and distracting.
 
-Anxiety can be caused by:
-• Racing thoughts about upcoming events or uncertainty
-• Negative thought patterns or worrying spirals
-• Excessive caffeine or lack of physical rest
-• Heightened sensitivity to social, study, or work pressures
-• Overstimulation from screens and constant information flow
+Possible causes might include:
+• Muscle strain from posture or sleep position
+• Stress-related tension
+• Prolonged screen use
+• Minor overuse/sprain (general possibility)
+• Irritation after a recent movement/activity
 
-Here are some things that may help:
-• Try the 5-4-3-2-1 grounding exercise: notice 5 things you see, 4 you can touch, 3 you hear, 2 you smell, and 1 you taste
-• Practice box breathing: inhale for 4 seconds, hold for 4, exhale for 4, hold for 4
-• Write down your anxious thoughts in a journal to release them from your head
-• Limit social media usage and news consumption for the rest of the day
-• Remind yourself that thoughts are not facts and this feeling will pass
+Self-care steps you can try now:
+• Take screen breaks and keep your neck supported if possible
+• Use gentle heat (or ice if it feels better) for comfort
+• Do slow, gentle range-of-motion only if it doesn't worsen pain
+• Try relaxing breathing and gentle shoulder/upper-back stretching if safe
 
-To better understand what you're going through:
-• Are you feeling the anxiety mostly in your body (like a fast heart rate or tight chest) or in your mind?
-• What is the main worry or thought that seems to be repeating itself right now?
-• Have you had experiences with anxiety like this before?
+Follow-up questions:
+• When did the neck pain start, and did anything trigger it (workout/awkward sleep/long screen time)?
+• Any numbness/tingling in the arms, severe weakness, or rapidly worsening pain?
 
-If this has been going on for a while or feels severe, it's worth checking in with a doctor or healthcare professional.`;
+${disclaimer}`;
   }
 
-  // 5. Lack of sleep / Insomnia
-  if (
-    msg.includes("insomnia") ||
-    msg.includes("sleep") ||
-    msg.includes("awake") ||
-    msg.includes("restless") ||
-    msg.includes("can't sleep") ||
-    msg.includes("cant sleep") ||
-    msg.includes("cannot sleep") ||
-    msg.includes("can't fall asleep") ||
-    msg.includes("cant fall asleep") ||
-    msg.includes("sleep deprived") ||
-    msg.includes("restless nights")
-  ) {
-    return `It can be incredibly frustrating to lie awake when all you want to do is rest and sleep.
+  if (/\b(stomach pain|stomachache|stomach ache|abdominal pain|tummy pain|tummyache|belly pain|cramp|bellyache)\b/.test(msg)) {
+    return `I'm sorry you're dealing with stomach pain — that can be uncomfortable.
 
-Trouble sleeping can be caused by:
-• Racing or anxious thoughts that activate when you lie down
-• Using screens close to bedtime (blue light disrupts melatonin)
-• Stress or worry about upcoming events
-• An irregular sleep schedule
-• Caffeine consumed later in the day
+Possible causes might include:
+• Indigestion, gas, or diet-related irritation (general possibilities)
+• Viral illness or mild GI upset
+• Stress affecting digestion
+• Constipation/dehydration
+• Food-related causes (and sometimes medication/supplement effects)
 
-Here are some things that may help tonight:
-• Write down everything on your mind before bed — it empties the mental load
-• Avoid all screens for at least 30 minutes before sleeping
-• Try progressive muscle relaxation: tense and release each muscle group from toes to shoulders
-• Keep your room cool, dark, and quiet
-• Try to go to bed and wake up at the same time every day
+Self-care steps you can try now:
+• Sip water or an oral rehydration drink if you can tolerate it
+• Stick to bland foods if you're hungry (toast/rice/bananas) and avoid heavy/spicy foods
+• Rest and use gentle heat to the abdomen for comfort
+• Avoid alcohol and large meals temporarily
 
-To better understand what's happening:
-• What does your mind tend to focus on when you're lying awake?
-• How many nights has this been going on?
-• Is there something specific coming up that's worrying you?
+Follow-up questions:
+• Where exactly is the pain (upper/lower, center/one side), and when did it start?
+• Any fever, vomiting, blood in stool, or worsening/severe pain?
 
-If this has been going on for a while or feels severe, it's worth checking in with a doctor or healthcare professional.`;
+${disclaimer}`;
   }
 
-  // 6. Low mood / Sadness / Depression
-  if (msg.includes("sad") || msg.includes("low mood") || msg.includes("depressed") || msg.includes("depression") || msg.includes("crying") || msg.includes("unhappy")) {
-    return `Feeling down or experiencing a low mood can make it hard to find motivation or connection with things you normally enjoy.
+  if (/\b(fever|temperature|high temperature|pyrexia)\b/.test(msg)) {
+    return `I'm sorry you're feeling unwell — fever can happen with many different illnesses.
 
-Low mood and sadness can be caused by:
-• Accumulated stress or emotional exhaustion without recovery
-• Social isolation or feeling disconnected from others
-• Lack of exposure to natural sunlight or disruption of physical routine
-• Automatic negative thoughts and self-criticism
-• Recent disappointing news or life transitions
+Possible causes might include:
+• Your body fighting an infection (general possibility)
+• Viral or bacterial infection
+• Dehydration or inflammation-related illness
 
-Here are some things that may help:
-• Take a brief, gentle walk outdoors to get some natural light and fresh air
-• Reach out and chat with a trusted friend, family member, or loved one
-• Write down three small things you are grateful for today
-• Keep to a basic, gentle routine for meals and rest
-• Treat yourself with kindness and allow yourself to feel without judgment
+Self-care steps you can try now:
+• Stay hydrated with small sips frequently
+• Rest and monitor symptoms
+• Keep the room comfortably cool
+• If you can, check your temperature
 
-To better understand what you're going through:
-• Have you been feeling this way for a few days, or has it been going on longer?
-• Are there specific areas of your life that feel particularly heavy or draining right now?
-• Is there one small activity that usually brings you a bit of comfort?
+Follow-up questions:
+• What is your temperature (if known), and how long has the fever been present?
+• Any concerning symptoms like trouble breathing, severe headache, stiff neck, confusion, persistent vomiting, or a new rash?
 
-If your mood remains consistently low for more than two weeks, please reach out to a doctor or mental health professional.`;
+${disclaimer}`;
+  }
+
+  if (/\b(cough|coughing)\b/.test(msg)) {
+    return `I'm sorry you're dealing with a cough — that can disrupt sleep and daily life.
+
+Possible causes might include:
+• Common cold/viral respiratory irritation (general possibility)
+• Allergy-related irritation or post-nasal drip
+• Airway irritation/asthma-like inflammation
+• Acid reflux irritating the throat
+• Infection (general possibility)
+
+Self-care steps you can try now:
+• Stay hydrated (warm fluids often feel soothing)
+• Consider honey if you're an adult (if appropriate)
+• Use gentle steam/humidified air if it helps
+• Rest and avoid smoke/irritants
+
+Follow-up questions:
+• How long have you had the cough, and is it dry or with mucus?
+• Any fever, shortness of breath, chest pain, or coughing blood?
+
+${disclaimer}`;
+  }
+
+  if (/\b(anxiety|anxious|panic|panicking|worried|worry|overthinking)\b/.test(msg)) {
+    return `It sounds like you're feeling anxious — that can be intense and hard to quiet.
+
+Possible causes might include:
+• Racing thoughts about uncertainty
+• Stress overload or poor sleep
+• Caffeine/stimulants, dehydration, or overstimulation
+• Worry spirals (general possibilities)
+
+Self-care steps you can try now:
+• Grounding: 5 things you see, 4 you can touch, 3 you hear, 2 you smell, 1 you taste
+• Box breathing (in 4, hold 4, out 4, hold 4) for a few rounds
+• Slow your pace and take a short break from screens
+
+Follow-up questions:
+• What’s the main worry or thought that keeps coming up?
+• On a scale of 1–10, how intense is your anxiety right now?
+
+${disclaimer}`;
+  }
+
+  if (/\b(stress|stressed|overwhelmed|burnout|pressure|tense|tension)\b/.test(msg)) {
+    return `It makes sense you’d feel stressed — pressure can build in both your mind and body.
+
+Possible causes might include:
+• Too much workload or high expectations
+• Not enough recovery time (sleep, breaks, relaxation)
+• Disrupted routines and stress eating
+• Caffeine/dehydration/irregular meals
+• Negative self-talk and rumination (general possibilities)
+
+Self-care steps you can try now:
+• Take a 5–10 minute break (step outside briefly or move gently)
+• Try slow breathing (exhale longer than inhale)
+• Drink water and eat something light if you haven't
+• Do one small next step to reduce mental load
+
+Follow-up questions:
+• What is the biggest source of stress right now (work/school, relationships, health, money, other)?
+• How is it showing up most: thoughts, emotions, or physical sensations?
+
+${disclaimer}`;
+  }
+
+  if (/\b(depression|depressed|sad|low mood|unhappy|crying|hopeless)\b/.test(msg)) {
+    return `I'm really sorry you're feeling low — that can be heavy and draining.
+
+Possible causes might include:
+• Accumulated stress or burnout
+• Changes in sleep, appetite, or routine
+• Social isolation or feeling disconnected
+• Persistent negative thought patterns
+• Life transitions or difficult events (general possibilities)
+
+Self-care steps you can try now:
+• Be gentle with yourself—small routines count (food, water, rest)
+• Get a little light/movement if possible (even a short walk)
+• Reach out to someone you trust briefly if you can
+
+Follow-up questions:
+• How long have you been feeling this way?
+• Do you still have any moments of relief, or does it feel constant?
+
+${disclaimer}`;
+  }
+
+  if (/\b(insomnia|can't sleep|cant sleep|cannot sleep|trouble sleeping|sleep deprived|restless nights|awake at night)\b/.test(msg)) {
+    return `I'm sorry you're not getting the sleep you need — insomnia can be exhausting.
+
+Possible causes might include:
+• Racing thoughts/anxiety when you try to rest
+• Stress and irregular schedules
+• Screen time close to bedtime
+• Caffeine/stimulants or late meals
+• A disrupted sleep environment (general possibilities)
+
+Self-care steps you can try tonight:
+• Avoid screens 30–60 minutes before bed if possible
+• If you can't sleep after ~20–30 minutes, try a quiet activity in dim light
+• Try relaxation (slow breathing or progressive muscle relaxation)
+• Keep your room cool/dark and keep a consistent wake time
+
+Follow-up questions:
+• How long has this sleep problem been going on?
+• What keeps you awake most: worry/thoughts, or physical discomfort?
+
+${disclaimer}`;
   }
 
   // Default greeting / general talk
-  return `I'm here to listen and support you. Whether you're dealing with stress, physical symptoms, or just need someone to talk to, feel free to share what's on your mind. How can I help you today?`;
+  return `I'm here to listen and support you. Whether you're dealing with stress, physical symptoms, or just need someone to talk to, feel free to share what's on your mind.`;
 }
+

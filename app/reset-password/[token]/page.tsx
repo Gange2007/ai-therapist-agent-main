@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Container } from "@/components/ui/container";
 import { Button } from "@/components/ui/button";
@@ -9,26 +10,94 @@ import Link from "next/link";
 import { Lock } from "lucide-react";
 
 export default function ResetPasswordPage() {
+  const params = useParams();
+  const router = useRouter();
+  const token = params.token as string;
+  
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tokenValid, setTokenValid] = useState(true);
+
+  useEffect(() => {
+    if (!token) {
+      setTokenValid(false);
+      setError("Invalid reset link. Please request a new password reset.");
+    }
+  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    
+    if (!token) {
+      setError("Invalid reset link. Please request a new password reset.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
     setLoading(true);
-    // TODO: Call backend to reset password
-    setTimeout(() => {
+
+    try {
+      const res = await fetch(`/api/auth/reset-password/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to reset password");
+      }
+
       setSuccess(true);
+      setTimeout(() => {
+        router.push("/login");
+      }, 2000);
+    } catch (error) {
+      console.error("Reset password error:", error);
+      setError(error instanceof Error ? error.message : "Failed to reset password");
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
+
+  if (!tokenValid) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/30">
+        <Container className="flex flex-col items-center justify-center w-full">
+          <Card className="w-full md:w-5/12 max-w-2xl p-8 md:p-10 rounded-3xl shadow-2xl border border-primary/10 bg-card/90 backdrop-blur-lg mt-20">
+            <div className="text-center py-8">
+              <p className="text-lg text-red-500 font-semibold mb-4">
+                Invalid Reset Link
+              </p>
+              <p className="text-muted-foreground mb-6">
+                {error || "This reset link is invalid or has expired."}
+              </p>
+              <Link
+                href="/forgot-password"
+                className="text-primary font-semibold underline hover:text-primary/80 transition-colors"
+              >
+                Request a new reset link
+              </Link>
+            </div>
+          </Card>
+        </Container>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/30">
@@ -47,11 +116,14 @@ export default function ResetPasswordPage() {
               <p className="text-lg text-primary font-semibold mb-2">
                 Password reset successful!
               </p>
+              <p className="text-muted-foreground mb-4">
+                Redirecting to login page...
+              </p>
               <Link
                 href="/login"
                 className="text-primary font-semibold underline hover:text-primary/80 transition-colors"
               >
-                Sign in
+                Sign in now
               </Link>
             </div>
           ) : (

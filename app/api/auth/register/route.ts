@@ -19,7 +19,15 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ name, email, password }),
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error("[POST /api/auth/register] Non-JSON response. status:", res.status, "url:", res.url);
+      console.error("[POST /api/auth/register] Response preview:", text.slice(0, 1024));
+      return NextResponse.json({ message: "Backend did not return JSON.", backendStatus: res.status, backendUrl: res.url, rawPreview: text.slice(0, 1024) }, { status: 502 });
+    }
 
     if (!res.ok) {
       console.error("[POST /api/auth/register] Backend error:", res.status, data);

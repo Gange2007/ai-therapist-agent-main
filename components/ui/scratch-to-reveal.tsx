@@ -47,6 +47,43 @@ export const ScratchToReveal: React.FC<ScratchToRevealProps> = ({
     }
   }, [gradientColors]);
 
+  const startAnimation = React.useCallback(async () => {
+    await controls.start({
+      scale: [1, 1.5, 1],
+      rotate: [0, 10, -10, 10, -10, 0],
+      transition: { duration: 0.5 },
+    });
+
+    if (onComplete) {
+      onComplete();
+    }
+  }, [controls, onComplete]);
+
+  const checkCompletion = React.useCallback(() => {
+    if (isComplete) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const pixels = imageData.data;
+      const totalPixels = pixels.length / 4;
+      let clearPixels = 0;
+
+      for (let i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] === 0) clearPixels++;
+      }
+
+      const percentage = (clearPixels / totalPixels) * 100;
+
+      if (percentage >= minScratchPercentage) {
+        setIsComplete(true);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        startAnimation();
+      }
+    }
+  }, [isComplete, minScratchPercentage, startAnimation]);
+
   useEffect(() => {
     const handleDocumentMouseMove = (event: MouseEvent) => {
       if (!isScratching) return;
@@ -86,7 +123,7 @@ export const ScratchToReveal: React.FC<ScratchToRevealProps> = ({
       document.removeEventListener("touchend", handleDocumentTouchEnd);
       document.removeEventListener("touchcancel", handleDocumentTouchEnd);
     };
-  }, [isScratching]);
+  }, [isScratching, checkCompletion]);
 
   const handleMouseDown = () => setIsScratching(true);
 

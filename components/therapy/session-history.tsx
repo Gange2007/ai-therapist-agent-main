@@ -11,18 +11,18 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { staticSessions } from "@/lib/static-data";
+import { getAllChatSessions } from "@/lib/api/chat";
 
 type Session = {
   id: string;
-  type: string;
+  title: string;
   status: string;
-  scheduledTime: Date;
+  createdAt: Date;
+  updatedAt: Date;
   summary?: string | null;
-  title?: string | null;
   isActive?: boolean;
 };
 
@@ -43,48 +43,44 @@ export function SessionHistory({ onNewSession }: SessionHistoryProps) {
     setMounted(true);
   }, []);
 
+  const loadSessions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await getAllChatSessions();
+      const transformedSessions = data
+        .map((session) => ({
+          id: session._id,
+          title: session.title || "New Chat Session",
+          status: session.status || "active",
+          createdAt: new Date(session.createdAt || Date.now()),
+          updatedAt: new Date(session.updatedAt || session.createdAt || Date.now()),
+          summary: session.summary || null,
+          isActive: session._id === params.sessionId,
+        }))
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+
+      setSessions(transformedSessions);
+    } catch (error) {
+      console.error("Failed to load sessions:", error);
+      setSessions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [params.sessionId]);
+
   // Load sessions when component mounts
   useEffect(() => {
     if (mounted) {
       loadSessions();
     }
-  }, [mounted]);
-
-  const loadSessions = async () => {
-    try {
-      setIsLoading(true);
-      // Use static data instead of database call
-      const transformedSessions = staticSessions
-        .map((session) => ({
-          ...session,
-          isActive: session.id === params.sessionId,
-        }))
-        .sort((a, b) => b.scheduledTime.getTime() - a.scheduledTime.getTime());
-
-      setSessions(transformedSessions);
-    } catch (error) {
-      console.error("Failed to load sessions:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [mounted, loadSessions]);
 
   const handleNewSession = async () => {
     try {
       if (onNewSession) {
         await onNewSession();
       } else {
-        // Create a new session with static data
-        const newSession = {
-          id: `session-${Date.now()}`,
-          type: "text",
-          status: "in_progress",
-          scheduledTime: new Date(),
-          title: "New Session",
-          isActive: true,
-        };
-        setSessions((prev) => [newSession, ...prev]);
-        router.push(`/therapy/${newSession.id}`);
+        router.push("/therapy/new");
       }
     } catch (error) {
       console.error("Failed to create new session:", error);
@@ -93,6 +89,10 @@ export function SessionHistory({ onNewSession }: SessionHistoryProps) {
 
   // Move getSessionTitle outside both components to share it
   const getSessionTitle = (session: Session) => {
+    if (session.title) {
+      return session.title.length > 40 ? `${session.title.substring(0, 40)}...` : session.title;
+    }
+
     if (session.summary) {
       const firstSentence = session.summary.split(".")[0];
       return firstSentence.length > 40
@@ -100,7 +100,7 @@ export function SessionHistory({ onNewSession }: SessionHistoryProps) {
         : firstSentence;
     }
 
-    const date = new Date(session.scheduledTime);
+    const date = new Date(session.updatedAt || session.createdAt);
     const timeStr = date.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -110,7 +110,7 @@ export function SessionHistory({ onNewSession }: SessionHistoryProps) {
 
   // Group sessions by date
   const groupedSessions = sessions.reduce((groups, session) => {
-    const date = new Date(session.scheduledTime).toLocaleDateString();
+    const date = new Date(session.updatedAt || session.createdAt).toLocaleDateString();
     if (!groups[date]) {
       groups[date] = [];
     }
@@ -135,7 +135,7 @@ export function SessionHistory({ onNewSession }: SessionHistoryProps) {
           filter === "all"
             ? true
             : filter === "active"
-            ? session.status === "in_progress"
+            ? session.status === "active"
             : session.status === "completed";
 
         return matchesSearch && matchesFilter;

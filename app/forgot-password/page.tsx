@@ -16,11 +16,27 @@ export default function ForgotPasswordPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // TODO: Call backend to send reset email
-    setTimeout(() => {
+
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to send reset email");
+      }
+
       setSubmitted(true);
+    } catch (error) {
+      console.error("Forgot password error:", error);
+      alert(error instanceof Error ? error.message : "Failed to send reset email");
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
 
   return (

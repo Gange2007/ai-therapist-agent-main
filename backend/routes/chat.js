@@ -6,6 +6,7 @@ const {
   getChatSession,
   sendMessage,
   getChatHistory,
+  clearChatHistory,
   completeSession,
   deleteSession,
   requestEscalation,
@@ -17,6 +18,7 @@ router.route('/sessions').post(protect, createChatSession).get(protect, getChatS
 router.route('/sessions/:id').get(protect, getChatSession).delete(protect, deleteSession);
 router.post('/sessions/:id/messages', protect, sendMessage);
 router.get('/sessions/:id/history', protect, getChatHistory);
+router.delete('/sessions/:id/history', protect, clearChatHistory);
 router.post('/sessions/:id/complete', protect, completeSession);
 router.post('/sessions/:id/escalate', protect, requestEscalation);
 router.get('/sessions/:id/analytics', protect, getSessionAnalytics);

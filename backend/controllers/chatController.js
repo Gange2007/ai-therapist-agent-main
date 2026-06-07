@@ -7,24 +7,39 @@ const { generateAIResponse } = require('../utils/aiService');
 // @route   POST /api/chat/sessions
 // @access  Private
 const createChatSession = asyncHandler(async (req, res) => {
+  console.log('[chatController] createChatSession called');
   const { title } = req.body;
-  const chatSession = await ChatSession.create({
-    userId: req.user._id,
-    title: title || 'New Chat Session',
-  });
+  
+  try {
+    const chatSession = await ChatSession.create({
+      userId: req.user._id,
+      title: title || 'New Chat Session',
+    });
 
-  res.status(201).json(chatSession);
+    console.log('[chatController] Session created successfully:', chatSession._id);
+    res.status(201).json(chatSession);
+  } catch (error) {
+    console.error('[chatController] Error creating session:', error.message, error.stack);
+    throw error;
+  }
 });
 
 // @desc    Get all chat sessions for a user
 // @route   GET /api/chat/sessions
 // @access  Private
 const getChatSessions = asyncHandler(async (req, res) => {
-  const sessions = await ChatSession.find({ userId: req.user._id })
-    .sort({ updatedAt: -1 })
-    .populate('userId', 'name email');
+  console.log('[chatController] getChatSessions called for user:', req.user._id);
+  try {
+    const sessions = await ChatSession.find({ userId: req.user._id })
+      .sort({ updatedAt: -1 })
+      .populate('userId', 'name email');
 
-  res.json(sessions);
+    console.log('[chatController] Found', sessions.length, 'sessions');
+    res.json(sessions);
+  } catch (error) {
+    console.error('[chatController] Error getting sessions:', error.message, error.stack);
+    throw error;
+  }
 });
 
 // @desc    Get a single chat session
@@ -50,20 +65,31 @@ const getChatSession = asyncHandler(async (req, res) => {
 // @route   POST /api/chat/sessions/:id/messages
 // @access  Private
 const sendMessage = asyncHandler(async (req, res) => {
+  console.log('[chatController] sendMessage called for session:', req.params.id);
   const { message } = req.body;
+  
+  if (!message) {
+    console.error('[chatController] No message provided');
+    res.status(400);
+    throw new Error('Message is required');
+  }
+
   const session = await ChatSession.findById(req.params.id);
 
   if (!session) {
+    console.error('[chatController] Session not found:', req.params.id);
     res.status(404);
     throw new Error('Session not found');
   }
 
   // Check ownership
   if (session.userId.toString() !== req.user._id.toString()) {
+    console.error('[chatController] Not authorized to access session:', req.params.id);
     res.status(403);
     throw new Error('Not authorized to access this session');
   }
 
+  console.log('[chatController] Adding user message to session');
   // Add user message
   session.messages.push({
     role: 'user',
@@ -76,11 +102,12 @@ const sendMessage = asyncHandler(async (req, res) => {
   let crisis = null;
   let themes = null;
   try {
+    console.log('[chatController] Analyzing message with ML service');
     sentiment = await analyzeSentiment(message);
     crisis = await detectCrisis(message);
     themes = await extractThemes(message);
   } catch (error) {
-    console.error('ML Service error:', error.message);
+    console.error('[chatController] ML Service error:', error.message);
   }
 
   // Build session context for AI
@@ -97,21 +124,37 @@ const sendMessage = asyncHandler(async (req, res) => {
     session.metadata.primaryTheme = themes.primaryTheme;
   }
 
+  console.log('[chatController] Generating AI response');
   // Generate AI response using OpenAI with enhanced context
-  const aiResponse = await generateAIResponse(message, sentiment, crisis, session.messages, sessionContext);
+  const aiResponse = await generateAIResponse(message, sentiment, crisis, session.messages, sessionContext).catch((e) => {
+    console.error('[chatController] generateAIResponse threw:', e?.message || e);
+    return null;
+  });
 
-  // Add AI response with enhanced metadata
+  console.log('[chatController] AI response processed');
+  // Prepare fallback content/metadata in case AI failed or returned malformed data
+  const fallbackContent = "I’m here to support you safely. Please tell me more about your symptoms or how you are feeling so I can respond with appropriate next steps. I am not a doctor. This is not medical advice.";
+  const fallbackMetadata = {
+    technique: 'clinical_support_fallback',
+    goal: 'Clarify symptoms and provide safe guidance',
+    model: 'fallback',
+  };
+
+  const assistantContent = (aiResponse && aiResponse.content) ? aiResponse.content : fallbackContent;
+  const assistantMetadata = (aiResponse && aiResponse.metadata) ? aiResponse.metadata : fallbackMetadata;
+
+  // Add AI response with metadata (use safe values)
   session.messages.push({
     role: 'assistant',
-    content: aiResponse.content,
+    content: assistantContent,
     timestamp: new Date(),
     metadata: {
-      ...aiResponse.metadata,
+      ...assistantMetadata,
       analysis: {
         emotionalState: sentiment?.sentiment || 'neutral',
         themes: themes?.themes || [],
         riskLevel: crisis?.riskLevel || 0,
-        recommendedApproach: aiResponse.metadata.technique,
+        recommendedApproach: assistantMetadata?.technique,
         progressIndicators: [],
       },
     },
@@ -151,8 +194,10 @@ const sendMessage = asyncHandler(async (req, res) => {
     session.title = message.substring(0, 30) + '...';
   }
 
+  console.log('[chatController] Saving session');
   await session.save();
 
+  console.log('[chatController] Message sent successfully');
   res.json(session.messages[session.messages.length - 1]);
 });
 
@@ -160,20 +205,53 @@ const sendMessage = asyncHandler(async (req, res) => {
 // @route   GET /api/chat/sessions/:id/history
 // @access  Private
 const getChatHistory = asyncHandler(async (req, res) => {
+  console.log('[chatController] getChatHistory called for session:', req.params.id);
   const session = await ChatSession.findById(req.params.id);
 
   if (!session) {
+    console.error('[chatController] Session not found for history:', req.params.id);
     res.status(404);
     throw new Error('Session not found');
   }
 
   // Check ownership
   if (session.userId.toString() !== req.user._id.toString()) {
+    console.error('[chatController] Not authorized to access history for session:', req.params.id);
     res.status(403);
     throw new Error('Not authorized to access this session');
   }
 
+  console.log('[chatController] Returning', session.messages.length, 'messages');
   res.json(session.messages);
+});
+
+// @desc    Clear chat history for a session (keep session, remove messages)
+// @route   DELETE /api/chat/sessions/:id/history
+// @access  Private
+const clearChatHistory = asyncHandler(async (req, res) => {
+  console.log('[chatController] clearChatHistory called for session:', req.params.id);
+  const session = await ChatSession.findById(req.params.id);
+
+  if (!session) {
+    console.error('[chatController] Session not found for clearing history:', req.params.id);
+    res.status(404);
+    throw new Error('Session not found');
+  }
+
+  // Check ownership
+  if (session.userId.toString() !== req.user._id.toString()) {
+    console.error('[chatController] Not authorized to clear history for session:', req.params.id);
+    res.status(403);
+    throw new Error('Not authorized to access this session');
+  }
+
+  // Clear messages but keep session
+  session.messages = [];
+  session.metadata = {};
+  await session.save();
+
+  console.log('[chatController] Chat history cleared for session:', req.params.id);
+  res.json({ message: 'Chat history cleared successfully' });
 });
 
 // @desc    Complete a chat session
@@ -203,20 +281,24 @@ const completeSession = asyncHandler(async (req, res) => {
 // @route   DELETE /api/chat/sessions/:id
 // @access  Private
 const deleteSession = asyncHandler(async (req, res) => {
+  console.log('[chatController] deleteSession called for session:', req.params.id);
   const session = await ChatSession.findById(req.params.id);
 
   if (!session) {
+    console.error('[chatController] Session not found for deletion:', req.params.id);
     res.status(404);
     throw new Error('Session not found');
   }
 
   // Check ownership
   if (session.userId.toString() !== req.user._id.toString()) {
+    console.error('[chatController] Not authorized to delete session:', req.params.id);
     res.status(403);
     throw new Error('Not authorized to access this session');
   }
 
   await session.deleteOne();
+  console.log('[chatController] Session deleted successfully:', req.params.id);
   res.json({ message: 'Session deleted successfully' });
 });
 
@@ -292,6 +374,7 @@ module.exports = {
   getChatSession,
   sendMessage,
   getChatHistory,
+  clearChatHistory,
   completeSession,
   deleteSession,
   requestEscalation,

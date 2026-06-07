@@ -27,30 +27,94 @@ export async function sendChatMessage(
   message: string,
   history: { role: "user" | "model"; parts: { text: string }[] }[] = []
 ) {
-  console.log("[sendChatMessage] Sending message:", message.slice(0, 60));
+  console.log("[sendChatMessage] Sending message to backend:", message.slice(0, 60), "sessionId:", sessionId);
 
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ message, history }),
-  });
+  const token = localStorage.getItem("token");
+  
+  // If sessionId is provided and not "new", use backend API with session management
+  if (sessionId && sessionId !== "new") {
+    const res = await fetch(`/api/chat/sessions/${sessionId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message }),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const errorMsg = (err as any).error || (err as any).message || "Failed to send message";
-    console.error("[sendChatMessage] Error response:", res.status, errorMsg);
-    throw new Error(errorMsg);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const errorMsg = (err as any).error || (err as any).message || "Failed to send message";
+      console.error("[sendChatMessage] Backend error response:", res.status, errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const data = await res.json();
+    console.log("[sendChatMessage] Got backend reply, length:", data.content?.length);
+
+    return {
+      sessionId,
+      response: data.content,
+      metadata: data.metadata,
+    };
   }
 
-  const data = await res.json() as { reply: string };
-  console.log("[sendChatMessage] Got reply, length:", data.reply?.length);
+  // If sessionId is "new" or not provided, create a new session first
+  console.log("[sendChatMessage] Creating new session for message");
+  try {
+    const newSession = await createChatSession();
+    console.log("[sendChatMessage] Created session:", newSession.sessionId);
+    
+    const res = await fetch(`/api/chat/sessions/${newSession.sessionId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message }),
+    });
 
-  return {
-    sessionId,
-    response: data.reply,
-  };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const errorMsg = (err as any).error || (err as any).message || "Failed to send message";
+      console.error("[sendChatMessage] Backend error response:", res.status, errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const data = await res.json();
+    console.log("[sendChatMessage] Got backend reply, length:", data.content?.length);
+
+    return {
+      sessionId: newSession.sessionId,
+      response: data.content,
+      metadata: data.metadata,
+    };
+  } catch (error) {
+    console.error("[sendChatMessage] Failed to create session:", error);
+    // Fallback to Gemini API if session creation fails
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message, history }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const errorMsg = (err as any).error || (err as any).message || "Failed to send message";
+      console.error("[sendChatMessage] Error response:", res.status, errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const data = await res.json() as { reply: string };
+    console.log("[sendChatMessage] Got Gemini reply, length:", data.reply?.length);
+
+    return {
+      sessionId,
+      response: data.reply,
+    };
+  }
 }
 
 // Simple session-based helpers (used by dashboard).
@@ -86,24 +150,34 @@ export async function getAllChatSessions(): Promise<ChatSessionSummary[]> {
 
 export async function createChatSession(): Promise<{ sessionId: string }> {
   try {
+    const token = localStorage.getItem("token");
     const res = await fetch("/api/chat/sessions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({}),
     });
 
     if (!res.ok) throw new Error("Failed to create session");
     const data = await res.json();
+    console.log("[createChatSession] Response:", data);
     return { sessionId: data._id || data.sessionId };
   } catch (error) {
+    console.error("[createChatSession] Error:", error);
     throw new Error("Failed to create chat session");
   }
 }
 
 export async function getChatHistory(sessionId: string): Promise<ChatMessage[]> {
   try {
+    const token = localStorage.getItem("token");
     const res = await fetch(`/api/chat/sessions/${sessionId}/history`, {
       method: "GET",
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     });
 
     if (!res.ok) return [];
@@ -111,13 +185,15 @@ export async function getChatHistory(sessionId: string): Promise<ChatMessage[]> 
     const data = await res.json();
     if (!Array.isArray(data)) return [];
 
+    console.log("[getChatHistory] Retrieved", data.length, "messages");
     return data.map((msg: any) => ({
       role: msg.role || "assistant",
       content: msg.content || "",
       timestamp: msg.timestamp ? new Date(msg.timestamp) : new Date(),
       metadata: msg.metadata,
     }));
-  } catch {
+  } catch (error) {
+    console.error("[getChatHistory] Error:", error);
     return [];
   }
 }
@@ -192,6 +268,36 @@ export async function getSessionAnalytics(
       requiresEscalation: false,
       sentimentHistory: [],
     };
+  }
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`/api/chat/sessions/${sessionId}`, {
+    method: "DELETE",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to delete session");
+  }
+}
+
+export async function clearChatHistory(sessionId: string): Promise<void> {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`/api/chat/sessions/${sessionId}/history`, {
+    method: "DELETE",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to clear chat history");
   }
 }
 

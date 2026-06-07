@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { TreePine, Volume2, VolumeX, Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,17 +14,19 @@ export function ForestGame() {
   const [volume, setVolume] = useState(50);
   const [progress, setProgress] = useState(0);
   const [timeLeft, setTimeLeft] = useState(MEDITATION_DURATION);
-  const [audioElements] = useState({
-    birds: new Audio("/sounds/birds.mp3"),
-    wind: new Audio("/sounds/wind.mp3"),
-    leaves: new Audio("/sounds/leaves.mp3"),
-  });
+  const audioElements = useMemo(
+    () => ({
+      birds: new Audio("/sounds/birds.mp3"),
+      wind: new Audio("/sounds/wind.mp3"),
+      leaves: new Audio("/sounds/leaves.mp3"),
+    }),
+    []
+  );
 
   useEffect(() => {
     // Set up audio loops
     Object.values(audioElements).forEach((audio) => {
       audio.loop = true;
-      audio.volume = volume / 100;
     });
 
     return () => {
@@ -34,13 +36,13 @@ export function ForestGame() {
         audio.currentTime = 0;
       });
     };
-  }, []);
+  }, [audioElements]);
 
   useEffect(() => {
     Object.values(audioElements).forEach((audio) => {
       audio.volume = volume / 100;
     });
-  }, [volume]);
+  }, [audioElements, volume]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
