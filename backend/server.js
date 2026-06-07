@@ -82,6 +82,14 @@ app.get("/health", (req, res) => {
 });
 
 /* =========================
+   HOME WELCOME ROUTE
+========================= */
+
+app.get("/", (req, res) => {
+  res.json({ message: "Welcome to the AI Therapist Backend API!" });
+});
+
+/* =========================
    ERROR HANDLER
 ========================= */
 
