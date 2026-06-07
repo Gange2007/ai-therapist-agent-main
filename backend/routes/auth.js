@@ -12,7 +12,8 @@ const {
 
 const { protect } = require("../middleware/auth");
 
-router.post("/register", registerUser);
+// ನಿಮ್ಮ ಫ್ರಂಟ್ಎಂಡ್ /signup ಅಂತ ಕರೆಯುತ್ತಿರುವುದರಿಂದ, ಇಲ್ಲಿ '/signup' ಎಂದು ಬದಲಾಯಿಸಲಾಗಿದೆ
+router.post("/signup", registerUser); 
 router.post("/login", loginUser);
 router.get("/me", protect, getUserProfile);
 router.put("/update-profile", protect, updateUserProfile);
